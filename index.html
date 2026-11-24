@@ -169,7 +169,35 @@ const vcCode=x=>{let v=(x?.icon||x?.conditions||'').toLowerCase();return v.inclu
 const waCode=x=>{let c=x?.condition?.code;return c==null?null:c===1000?0:c===1003?2:c===1006||c===1009?3:c>=1273?95:c>=1180&&c<=1246?61:c>=1063?53:1};
 const tomorrowCode=c=>{if(c==null)return null;return c===1000?0:c===1100?1:c===1101?2:c===1001?3:c>=8000?95:c>=5000?73:c>=4000?61:c>=2000?45:2};
 const keys=()=>({weatherapi:localStorage.getItem('ensemble_weatherapi')||'',tomorrow:localStorage.getItem('ensemble_tomorrow')||'',openweather:localStorage.getItem('ensemble_openweather')||''});
-const getJSON=async(url)=>{let r=await fetch(url);if(!r.ok)throw Error('HTTP '+r.status);return r.json()};
+// Cache successful forecast API responses for 15 minutes, per exact URL/location/key.
+const FORECAST_CACHE_MS=15*60*1000;
+const forecastRequests=new Map();
+const cacheKey=url=>'weather_api_cache_v1_'+url;
+const getJSON=async(url)=>{
+ const key=cacheKey(url),now=Date.now();
+ let cached=null;
+ try{cached=JSON.parse(localStorage.getItem(key)||'null')}catch(e){}
+ if(cached&&cached.savedAt>now-FORECAST_CACHE_MS&&cached.data)return cached.data;
+ if(forecastRequests.has(url))return forecastRequests.get(url);
+ const request=(async()=>{
+  try{
+   const r=await fetch(url);
+   if(!r.ok)throw Error('HTTP '+r.status);
+   const data=await r.json();
+   try{localStorage.setItem(key,JSON.stringify({savedAt:Date.now(),data}))}catch(e){
+    // Storage can be full; still return live data without breaking forecasts.
+    console.warn('Weather cache storage unavailable',e);
+   }
+   return data;
+  }catch(e){
+   // During rate limits or connectivity loss, show previously successful data if available.
+   if(cached?.data){console.warn('Using older cached weather response:',e.message);return cached.data}
+   throw e;
+  }
+ })();
+ forecastRequests.set(url,request);
+ try{return await request}finally{forecastRequests.delete(url)}
+};
 const entry=(time,temp,prob,rain,wind,dir,code)=>({time,temp:numeric(temp),prob:numeric(prob),rain:numeric(rain),wind:numeric(wind),dir:numeric(dir),code:meteoCode(code)});
 async function visualCrossing(){let url='https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/'+encodeURIComponent(coords.latitude+','+coords.longitude)+'?unitGroup=metric&include=days,hours&contentType=json';let j=await getJSON(url);return (j.days||[]).flatMap(d=>(d.hours||[]).map(h=>entry(d.datetime+'T'+h.datetime.slice(0,2)+':00',h.temp,h.precipprob,h.precip,h.windspeed,h.winddir,vcCode(h))))}
 async function metNorway(){let lat=Number(coords.latitude).toFixed(4),lon=Number(coords.longitude).toFixed(4);let j=await getJSON(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`);return (j.properties?.timeseries||[]).filter(x=>x.data?.next_1_hours).map(x=>{let v=x.data.instant.details,n=x.data.next_1_hours;return entry(localHour(new Date(x.time),coords.timezone),v.air_temperature,null,n.details?.precipitation_amount,v.wind_speed==null?null:v.wind_speed*3.6,v.wind_from_direction,({'clearsky':0,'fair':1,'partlycloudy':2,'cloudy':3,'fog':45,'lightrain':61,'rain':63,'heavyrain':65,'snow':73,'rainshowers':80,'heavyrainshowers':82,'thunderstorm':95})[(n.summary?.symbol_code||'').replace(/_(day|night|polartwilight)$/,'')]??null)})}
@@ -192,7 +220,20 @@ let loadToken=0;
 const enabled=(id)=>{let v=localStorage.getItem('ensemble_use_'+id);return v===null?(id==='Visual'||id==='Met'||id==='Openmeteo'):v==='true'};
 function setLastRefreshed(date){const d=new Date(date);if(!Number.isFinite(d.getTime()))return;const formatted=new Intl.DateTimeFormat('en-AU',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit',hour12:true}).format(d);$('lastRefreshed').textContent='Updated '+formatted;try{localStorage.setItem('ensemble_last_refresh',d.toISOString())}catch(e){}}
 try{const saved=localStorage.getItem('ensemble_last_refresh');if(saved)setLastRefreshed(saved)}catch(e){}
-async function load(){let token=++loadToken;$('status').textContent='Loading selected forecasts…';let k=keys(),jobs=[];if(enabled('Visual'))jobs.push(['Visual Crossing',visualCrossing()]);if(enabled('Met'))jobs.push(['MET Norway',metNorway()]);if(enabled('Openmeteo'))jobs.push(['Open-Meteo',openMeteo()]);if(enabled('Weatherapi')&&k.weatherapi)jobs.push(['WeatherAPI',weatherAPI(k.weatherapi)]);if(enabled('Tomorrow')&&k.tomorrow)jobs.push(['Tomorrow.io',tomorrowAPI(k.tomorrow)]);if(enabled('Openweather')&&k.openweather)jobs.push(['OpenWeather',openWeather(k.openweather)]);if(!jobs.length){$('status').textContent='No configured providers selected. Enable a provider in ⚙ and add its key if required.';$('providers').textContent='';return}const windPromise=enabled('Visual')?jobs.find(x=>x[0]==='Visual Crossing')[1]:visualCrossing();let settled=await Promise.allSettled(jobs.map(x=>x[1]));if(token!==loadToken)return;let sources=[],errors=[];settled.forEach((r,i)=>{if(r.status==='fulfilled'&&r.value.length)sources.push({name:jobs[i][0],rows:r.value});else errors.push(jobs[i][0]+': '+(r.reason?.message||'no data'))});if(!sources.length){$('status').textContent='No forecast providers available. '+errors.join(' · ');$('providers').textContent='';return}forecast=blend(sources);
+async function load(){let token=++loadToken;$('status').textContent='Loading selected forecasts…';let k=keys(),jobs=[];if(enabled('Visual'))jobs.push(['Visual Crossing',visualCrossing()]);if(enabled('Met'))jobs.push(['MET Norway',metNorway()]);if(enabled('Openmeteo'))jobs.push(['Open-Meteo',openMeteo()]);if(enabled('Weatherapi')&&k.weatherapi)jobs.push(['WeatherAPI',weatherAPI(k.weatherapi)]);if(enabled('Tomorrow')&&k.tomorrow)jobs.push(['Tomorrow.io',tomorrowAPI(k.tomorrow)]);if(enabled('Openweather')&&k.openweather)jobs.push(['OpenWeather',openWeather(k.openweather)]);if(!jobs.length){$('status').textContent='No configured providers selected. Enable a provider in ⚙ and add its key if required.';$('providers').textContent='';return}const windPromise=enabled('Visual')?jobs.find(x=>x[0]==='Visual Crossing')[1]:visualCrossing();let settled=await Promise.allSettled(jobs.map(x=>x[1]));if(token!==loadToken)return;let sources=[],errors=[];settled.forEach((r,i)=>{if(r.status==='fulfilled'&&r.value.length)sources.push({name:jobs[i][0],rows:r.value});else errors.push(jobs[i][0]+': '+(r.reason?.message||'no data'))});if(!sources.length){$('status').textContent='No forecast providers available. '+errors.join(' · ');$('providers').textContent='';return}// Extend the daily horizon when selected providers supply fewer than seven days.
+// Supplemental Open-Meteo values are used only for timestamps not covered by selected providers.
+const existingDates=new Set(sources.flatMap(src=>src.rows.map(r=>r.time.slice(0,10))));
+let fallbackUsed=false;
+if(existingDates.size<7){
+ try{
+  const supplemental=enabled('Openmeteo')?sources.find(src=>src.name==='Open-Meteo')?.rows:await openMeteo();
+  if(supplemental?.length){
+   const missing=supplemental.filter(r=>!existingDates.has(r.time.slice(0,10)));
+   if(missing.length){sources.push({name:'Open-Meteo (additional days)',rows:missing});fallbackUsed=true}
+  }
+ }catch(e){console.warn('Additional daily forecast unavailable',e)}
+}
+forecast=blend(sources);
 // Wind is exclusively from Visual Crossing, regardless of selected forecast providers.
 // Never substitute another provider's wind if Visual Crossing is unavailable.
 let windRows=[];try{windRows=await windPromise}catch(e){console.warn('Visual Crossing wind unavailable',e)}
@@ -211,7 +252,7 @@ for(let i=0;i<forecast.daily.time.length;i++){
  forecast.daily.wind_speed_10m_max[i]=speeds.length?Math.max(...speeds):null;
  forecast.daily.wind_direction_10m_dominant[i]=directions.length?circularMean(directions):null;
 }
-$('providers').innerHTML='<b>Average of '+sources.length+' provider'+(sources.length===1?'':'s')+':</b> '+sources.map(x=>x.name).join(', ')+(errors.length?' · Unavailable: '+errors.join('; '):'');$('status').textContent='';render();setLastRefreshed(new Date())}
+$('providers').innerHTML='<b>Average of '+sources.length+' provider'+(sources.length===1?'':'s')+':</b> '+sources.filter(x=>x.name!=='Open-Meteo (additional days)').map(x=>x.name).join(', ')+(fallbackUsed?' · Extended days: Open-Meteo':'')+(errors.length?' · Unavailable: '+errors.join('; '):'');$('status').textContent='';render();setLastRefreshed(new Date())}
 $('hideRainDetails').checked=!hideRainDetails();$('hideRainDetails').onchange=()=>{localStorage.setItem('ensemble_hide_rain',String(!$('hideRainDetails').checked));render()};
   $('hours').addEventListener('click',e=>{const el=e.target.closest('[data-rain]');if(el&&hideRainDetails())showRainDetail(el.dataset.rain)});
   $('hours').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-rain]')){e.preventDefault();showRainDetail(e.target.dataset.rain)}});
