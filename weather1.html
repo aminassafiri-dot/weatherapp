@@ -165,7 +165,7 @@ header .location{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:
 #dayView .daily-temp .high{right:auto;left:calc(var(--bar-right) + 3px)}
 
 /* Compact daily rows; icon and weekday vertically centered with bars. */
-#dayView .day{min-height:45px;padding-top:6px!important;padding-bottom:6px!important;cursor:default;align-items:center}
+#dayView .day{min-height:40.61px;padding-top:5.7px!important;padding-bottom:5.7px!important;cursor:default;align-items:center}
 #dayView .daily-info{display:flex;align-items:center;align-self:center;min-height:25px}
 #dayView .daily-day{display:flex;flex-direction:row;align-items:center;justify-content:flex-start;gap:5px;margin:0;line-height:1.1}
 #dayView .daily-day .icon{line-height:1;display:inline-flex;align-items:center}
@@ -214,12 +214,73 @@ header .location{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:
 #dayView .day.pre-extended{border-bottom:0!important}
 #dayView .extended-forecast{margin:0!important;padding:0;height:18px;gap:9px;font-size:10px;line-height:18px}
 #dayView .extended-forecast:before,#dayView .extended-forecast:after{background:rgba(145,169,194,.22);height:1px}
+
+  /* Swipe progress floats over the forecast while the content follows the finger. */
+  #hourView,#dayView{touch-action:pan-y;will-change:transform}
+  .swipe-indicator{position:fixed;top:48%;left:50%;transform:translate(-50%,-50%) scale(.94);z-index:90;pointer-events:none;opacity:0;transition:opacity .12s,transform .12s;display:flex;align-items:center;gap:8px;padding:11px 16px 14px;border-radius:14px;background:rgba(18,38,62,.94);border:1px solid #41698b;box-shadow:0 8px 25px #0008;color:#c5def3;font-size:13px;font-weight:650;white-space:nowrap;overflow:hidden}
+  .swipe-indicator.visible{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  .swipe-indicator.ready{color:#fff;border-color:#52b8fa;background:rgba(20,89,136,.96)}
+  .swipe-arrow{font-size:22px;line-height:1;color:#7dd3fc}
+  .swipe-indicator:after{content:'';position:absolute;bottom:0;left:0;height:3px;width:var(--swipe-progress,0%);background:#38bdf8;transition:width .04s linear}
 </style></head><body><main><header><div class="location-stack"><div class="location" id="place" role="button" tabindex="0" title="Change location" aria-label="Change location">📍 Fawkner, Victoria 3060</div><div id="lastRefreshed" class="last-refreshed" aria-live="polite">Not refreshed yet</div></div><div class="hbtns"><nav class="tabs"><button id="viewToggle" type="button" title="Switch forecast view">Hourly ⇄</button></nav><button type="button" id="settings" title="Settings">⚙</button></div></header><div id="settingsPanel" class="hidden settings"><b>Forecast providers</b><div class="provider-toggles"><label><input type="checkbox" id="useVisual" checked> Visual Crossing</label><label><input type="checkbox" id="useMet" checked> MET Norway</label><label><input type="checkbox" id="useOpenmeteo" checked> Open-Meteo</label><label><input type="checkbox" id="useWeatherapi"> WeatherAPI.com</label><label><input type="checkbox" id="useTomorrow"> Tomorrow.io</label><label><input type="checkbox" id="useOpenweather"> OpenWeather</label></div><p>Visual Crossing, MET Norway and Open-Meteo need no key. Add keys to include the other three providers in the average.</p><label>WeatherAPI.com key <input id="weatherapiKey" type="password" placeholder="Optional API key"></label><label>Tomorrow.io key <input id="tomorrowKey" type="password" placeholder="Optional API key"></label><label>OpenWeather 3.0 key <input id="openweatherKey" type="password" placeholder="Optional API key"></label><button type="button" id="saveSettings" class="primary">Save & refresh</button><p>Keys are stored only in this browser. Browser access and provider subscriptions may restrict some sources. No missing provider is treated as zero.</p></div><div id="locationModal" class="location-modal hidden" role="dialog" aria-modal="true" aria-label="Change location"><div class="location-card"><div class="location-top"><b>Change location</b><button type="button" id="locationClose" aria-label="Close location popup">✕</button></div><b>Location</b><form id="search" autocomplete="off"><div class="citywrap"><input id="city" value="Fawkner 3060" aria-label="Location" placeholder="Suburb or postcode"><div id="suggest" class="suggest hidden"></div></div><button class="primary">Find</button></form></div></div><div id="status"></div><section id="hourView" class="panel"><div class="row heading"><span class="hicon" title="Day">📅</span><span class="hicon" title="Time">🕒</span><span></span><span class="hicon" title="Temperature">🌡️</span><span class="rainhead" id="rainHead" role="button" tabindex="0" title="Tap to explain rain icons">🌧️ ⓘ</span><span class="windhead hicon" title="Wind (km/h)">💨</span></div><div id="hours"></div></section><div id="rainInfo" class="rainmodal hidden"><div class="rainbox"><b>Rain icons</b><table><thead><tr><th>Icon</th><th>When (first match wins)</th></tr></thead><tbody id="rainRules"></tbody></table><p></p><label id="rainDisplaySetting" class="rainsetting"><span>Show rain details</span><input type="checkbox" id="hideRainDetails"></label><button type="button" id="rainClose" class="primary">Close</button></div></div><section id="dayView" class="hidden"></section><div id="dayDetailModal" class="rainmodal hidden" role="dialog" aria-modal="true" aria-labelledby="dayDetailTitle"><div class="rainbox day-detail-box"><h2 id="dayDetailTitle"></h2><div id="dayDetailBody"></div><button id="dayDetailClose" class="primary" type="button">Close</button></div></div><div id="providers" class="source" aria-live="polite"></div></main><script>
 let coords={latitude:-37.7059,longitude:144.9686,timezone:'Australia/Melbourne'},forecast=null;const $=id=>document.getElementById(id);const fmt=(n,d=1)=>Number.isFinite(Number(n))&&n!==null?Number(n).toFixed(d):'—';const rainAmount=n=>{let v=num(n);return v===null||v<=0?'':v<0.01?'<0.01':v.toFixed(2)};const num=n=>n===null||n===undefined||!Number.isFinite(Number(n))?null:Number(n);const icon=(c,night=false)=>{let kind=c==null?'unknown':c===0?'clear':c<=2?'partly':c===3?'cloud':c<=48?'fog':c<=57?'drizzle':c<=67?'rain':c<=77?'snow':c<=82?'showers':c<=86?'snow':'storm';let sky=night?'<path d="M13 2a8 8 0 1 0 9 12A8 8 0 0 1 13 2" fill="#f7e7a2"/>':'<circle cx="11" cy="10" r="5" fill="#ffcb51"/><path d="M11 1v3M11 16v3M2 10h3M17 10h3M4 3l2 2M16 15l2 2M18 3l-2 2M6 15l-2 2" stroke="#ffcb51" stroke-width="1.7" stroke-linecap="round"/>';let cloud='<path d="M8 20h16a6 6 0 0 0 .2-12A9 9 0 0 0 7 9a5.5 5.5 0 0 0 1 11Z" fill="#c7d4e4" stroke="#8da2bb" stroke-width="1"/>';let drops=n=>Array.from({length:n},(_,i)=>`<path d="M${9+i*7} 23l-2 5" stroke="#58baff" stroke-width="2.6" stroke-linecap="round"/>`).join('');let detail=kind==='drizzle'?drops(1):kind==='rain'?drops(2):kind==='showers'?drops(3):kind==='storm'?drops(2)+'<path d="M20 20l-5 8h5l-3 5" stroke="#ffd04d" stroke-width="2" fill="none"/>':kind==='snow'?'<text x="11" y="30" font-size="11" fill="#b8e9ff">✳</text>':kind==='fog'?'<path d="M5 24h24M9 28h19" stroke="#a8b6c9" stroke-width="2"/>':'';let cloudy=kind!=='clear';return `<svg viewBox="0 0 36 36" width="23" height="23" aria-label="${kind}${night?' at night':''}" role="img" style="vertical-align:middle;overflow:visible">${sky}${cloudy?`<g transform="translate(3 2) scale(.87)">${cloud}${detail}</g>`:''}${kind==='unknown'?'?':''}</svg>`};const compass=d=>['N','NE','E','SE','S','SW','W','NW'][Math.round(d/45)%8];const tempColor=t=>{if(t==null)return '#cbd5e1';const stops=[[0,'#79baf0'],[10,'#a6c9da'],[16,'#d5d5d2'],[22,'#ffb65a'],[27,'#ff8245'],[32,'#ed3b31'],[40,'#ff1717']];let i=1;while(i<stops.length&&t>stops[i][0])i++;if(i===stops.length)return stops[stops.length-1][1];const [lo,hi]=[stops[i-1],stops[i]],f=Math.max(0,Math.min(1,(t-lo[0])/(hi[0]-lo[0])));const rgb=h=>[1,3,5].map(n=>parseInt(h.slice(n,n+2),16));let x=rgb(lo[1]),y=rgb(hi[1]);return `rgb(${x.map((v,k)=>Math.round(v+(y[k]-v)*f)).join(',')})`};const time12=t=>{let h=Number(t.slice(11,13));return `${h%12||12}${h<12?'am':'pm'}`};const dayName=s=>new Date(s+'T12:00:00Z').toLocaleDateString('en-AU',{weekday:'short',timeZone:'UTC'});const footerDaily='Daily forecasts combine multiple weather sources. Days further into the future have fewer contributing sources.';const footerHourly='Hourly forecasts combine data from multiple weather sources. When both WeatherAPI and Tomorrow.io are available, their forecasts are averaged; otherwise, all available sources are used.';function updateForecastFooter(){const isDay=!$('dayView').classList.contains('hidden');$('providers').textContent=isDay?footerDaily:footerHourly;}function setTab(t){localStorage.setItem('ensemble_view',t);$('hourView').classList.toggle('hidden',t!=='hour');$('dayView').classList.toggle('hidden',t!=='day');$('viewToggle').textContent=t==='hour'?'Hourly ⇄':'Daily ⇄';$('viewToggle').setAttribute('aria-label','Current view '+(t==='hour'?'Hourly':'Daily')+'. Tap to switch');localStorage.setItem('ensemble_view',t);updateForecastFooter()} const rules=[[5,1,70,'≥70% and ≥1.0 mm'],[4,0.5,55,'≥55% and ≥0.5 mm'],[3,0.3,40,'≥40% and ≥0.3 mm'],[2,0.2,25,'≥25% and ≥0.2 mm'],[1,0.1,10,'≥10% or ≥0.1 mm'],[1,0.01,0,'Rain below 0.1 mm and probability below 10% (faded grey)'],[0,0,0,'No rain (0 mm)']];
 const openRain=()=>{$('rainDisplaySetting').classList.remove('hidden');$('hideRainDetails').checked=!hideRainDetails();$('rainInfo').querySelector('b').textContent='Rain icons';$('rainInfo').querySelector('table').classList.remove('hidden');$('rainInfo').querySelector('p').textContent='';$('rainRules').innerHTML=rules.map(r=>`<tr><td>${r[0]?rainDrops(r[2],r[1]):'—'}</td><td>${r[3]}</td></tr>`).join('');$('rainInfo').classList.remove('hidden')};
 $('rainHead').onclick=openRain;$('rainHead').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openRain()}};
 $('rainClose').onclick=()=>$('rainInfo').classList.add('hidden');$('rainInfo').onclick=e=>{if(e.target.id==='rainInfo')$('rainInfo').classList.add('hidden')};
 $('viewToggle').onclick=()=>setTab($('dayView').classList.contains('hidden')?'day':'hour');
+  // Both swipe directions toggle views, with live drag feedback.
+  (()=>{
+    const area=document.querySelector('main');
+    const badge=document.createElement('div');
+    badge.className='swipe-indicator';
+    badge.setAttribute('aria-hidden','true');
+    badge.innerHTML='<span class="swipe-arrow"></span><span class="swipe-label"></span>';
+    area.appendChild(badge);
+    let start=null,dragging=false;
+    const activeView=()=> $('dayView').classList.contains('hidden')?$('hourView'):$('dayView');
+    const blocked=()=>['locationModal','rainInfo','dayDetailModal','settingsPanel'].some(id=>!$(id).classList.contains('hidden'));
+    function clear(){
+      const view=activeView();
+      view.style.transition='transform .18s ease, opacity .18s ease';
+      view.style.transform='';view.style.opacity='';
+      badge.classList.remove('visible','ready');
+      setTimeout(()=>{view.style.transition='';},190);
+      start=null;dragging=false;
+    }
+    area.addEventListener('touchstart',e=>{
+      if(e.touches.length!==1||blocked()||e.target.closest('button,input,select,textarea,a,[role="dialog"],.settings,[data-rain]')){start=null;return;}
+      const t=e.touches[0];start={x:t.clientX,y:t.clientY};dragging=false;
+    },{passive:true});
+    area.addEventListener('touchmove',e=>{
+      if(!start||e.touches.length!==1)return;
+      const t=e.touches[0],dx=t.clientX-start.x,dy=t.clientY-start.y;
+      if(!dragging){
+        if(Math.abs(dy)>Math.abs(dx)&&Math.abs(dy)>10){start=null;return;}
+        if(Math.abs(dx)<12||Math.abs(dx)<Math.abs(dy)*1.3)return;
+        dragging=true;
+      }
+      const distance=Math.min(90,Math.abs(dx)*.42);
+      const target=$('dayView').classList.contains('hidden')?'Daily':'Hourly';
+      const ready=Math.abs(dx)>=65;
+      const view=activeView();
+      view.style.transition='none';
+      view.style.transform=`translateX(${Math.sign(dx)*distance}px)`;
+      view.style.opacity=String(1-Math.min(.22,Math.abs(dx)/450));
+      badge.querySelector('.swipe-arrow').textContent=dx>0?'→':'←';
+      badge.querySelector('.swipe-label').textContent=(ready?'Release for ':'Swipe for ')+target;
+      badge.classList.add('visible');badge.classList.toggle('ready',ready);
+      badge.style.setProperty('--swipe-progress',Math.min(100,Math.abs(dx)/65*100)+'%');
+      if(e.cancelable)e.preventDefault();
+    },{passive:false});
+    area.addEventListener('touchend',e=>{
+      if(!start)return;
+      const t=e.changedTouches[0],dx=t.clientX-start.x,dy=t.clientY-start.y;
+      const toggle=dragging&&Math.abs(dx)>=65&&Math.abs(dx)>Math.abs(dy)*1.3&&!blocked();
+      clear();
+      if(toggle)setTab($('dayView').classList.contains('hidden')?'day':'hour');
+    },{passive:true});
+    area.addEventListener('touchcancel',()=>{if(start)clear();},{passive:true});
+  })();
 const hideRainDetails=()=>localStorage.getItem('ensemble_hide_rain')==='true';
   const rainDetail=(mm,p)=>num(mm)>0?rainAmount(mm)+'mm'+(p==null?'':' @ '+Math.round(p)+'%'):'No rain (0 mm)';
   function render(){$('hourView').querySelector('.heading').classList.toggle('compactrain',hideRainDetails());if(!forecast)return;let h=forecast.hourly,d=forecast.daily;const offset=new Date().toLocaleString('sv-SE',{timeZone:coords.timezone}).replace(' ','T');let first=h.time.findIndex(t=>t>=offset.slice(0,13)+':00');if(first<0)first=0;const todayLocal=offset.slice(0,10),suppressTodayLow=Number(offset.slice(11,13))>=7;const dailyHigh=new Map(),dailyLow=new Map();const showDailyLow=day=>!(suppressTodayLow&&day===todayLocal);h.time.forEach((time,i)=>{const value=h.temperature_2m[i];if(value!=null&&Number.isFinite(Number(value))){const day=time.slice(0,10);dailyHigh.set(day,Math.max(dailyHigh.get(day)??-Infinity,Number(value)));dailyLow.set(day,Math.min(dailyLow.get(day)??Infinity,Number(value)))}});$('hours').innerHTML=h.time.slice(first,first+72).map((t,j)=>{let i=j+first;return `<div class="row${isNight(t)?' night':''}${hideRainDetails()?' compactrain':''}${i>first&&t.slice(0,10)!==h.time[i-1].slice(0,10)?' new-day':''}"><div><b>${dayName(t.slice(0,10))}</b></div><div><b>${time12(t)}</b></div><div><span class="houricon" title="Weather condition">${icon(h.weather_code[i],Number(t.slice(11,13))<7||Number(t.slice(11,13))>=19)}</span></div><span class="temp${h.temperature_2m[i]!=null&&Number(h.temperature_2m[i])===dailyHigh.get(t.slice(0,10))?' daily-high':showDailyLow(t.slice(0,10))&&h.temperature_2m[i]!=null&&Number(h.temperature_2m[i])===dailyLow.get(t.slice(0,10))?' daily-low':''}" style="color:${tempColor(h.temperature_2m[i])};--peak-color:${tempColor(h.temperature_2m[i])}" title="${h.temperature_2m[i]!=null&&Number(h.temperature_2m[i])===dailyHigh.get(t.slice(0,10))?'Daily maximum temperature':showDailyLow(t.slice(0,10))&&h.temperature_2m[i]!=null&&Number(h.temperature_2m[i])===dailyLow.get(t.slice(0,10))?'Daily minimum temperature':''}">${h.temperature_2m[i]==null?"—":Math.round(h.temperature_2m[i])+"°"}</span><span class="rainprob" ${hideRainDetails()&&num(h.precipitation[i])>0?`role="button" tabindex="0" aria-label="Rain detail ${rainDetail(h.precipitation[i],h.precipitation_probability[i])}" data-rain="${rainDetail(h.precipitation[i],h.precipitation_probability[i])}"`:``}>${rainDrops(h.precipitation_probability[i],h.precipitation[i])}</span><span class="raindetail">${num(h.precipitation[i])>0?rainDetail(h.precipitation[i],h.precipitation_probability[i]):''}</span><span class="windcell ${h.wind_speed_10m[i]!=null&&h.wind_speed_10m[i]<6?'low calm':h.wind_speed_10m[i]<15?'low':h.wind_speed_10m[i]<20?'mid':h.wind_speed_10m[i]>=30?'high':''}"><b>${h.wind_speed_10m[i]==null?"—":Math.round(h.wind_speed_10m[i])}</b><small>${h.wind_direction_10m[i]==null?"":`<span class="windarrow" style="transform:rotate(${(h.wind_direction_10m[i]+180)%360}deg)" title="Wind from ${compass(h.wind_direction_10m[i])}">↑</span>`}</small></span></div>`}).join('');$('dayView').innerHTML=d.time.map((t,i)=>{
