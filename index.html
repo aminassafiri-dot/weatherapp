@@ -141,8 +141,21 @@ header .location{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:
 
 #rainDisplaySetting:not(.hidden){display:flex !important;align-items:center;margin-bottom:18px !important}
 #rainClose{display:block;width:100%}
+.daily-source-count{position:absolute;top:3px;right:5px;font-size:9px;line-height:1;color:#93a9c0;opacity:.38;font-weight:500;pointer-events:none}
+
+/* Compact rectangular daily cards with temperature bar priority */
+#dayView .day{border-radius:0 !important;grid-template-columns:minmax(76px,.9fr) minmax(140px,2.15fr) minmax(58px,.65fr);gap:3px}
+#dayView .daily-info{min-width:0}
+#dayView .daily-day{gap:4px;font-size:12px;align-items:flex-start}#dayView .daily-day span:last-child{position:relative;top:-2px}
+#dayView .daily-day .icon{font-size:17px}
+#dayView .daily-temp{min-width:0}
+#dayView .daily-temp-track{flex:1;min-width:35px}
+#dayView .daily-source-count{opacity:.38}
+#dayView .extended-forecast{display:flex;align-items:center;gap:10px;margin:7px 0 5px;color:#91a8c2;font-size:11px;font-weight:600;letter-spacing:.4px;white-space:nowrap}
+#dayView .extended-forecast:before,#dayView .extended-forecast:after{content:"";height:1px;background:#40536b;flex:1}
+@media(max-width:480px){#dayView .day{grid-template-columns:minmax(67px,.85fr) minmax(115px,2.2fr) minmax(52px,.6fr);gap:2px;padding:8px 5px}#dayView .daily-day{font-size:12px;gap:3px;align-items:flex-start}#dayView .daily-day .icon{font-size:16px}}
 </style></head><body><main><header><div class="location-stack"><div class="location" id="place" role="button" tabindex="0" title="Change location" aria-label="Change location">📍 Fawkner, Victoria 3060</div><div id="lastRefreshed" class="last-refreshed" aria-live="polite">Not refreshed yet</div></div><div class="hbtns"><nav class="tabs"><button id="viewToggle" type="button" title="Switch forecast view">Hourly ⇄</button></nav><button type="button" id="settings" title="Settings">⚙</button></div></header><div id="settingsPanel" class="hidden settings"><b>Forecast providers</b><div class="provider-toggles"><label><input type="checkbox" id="useVisual" checked> Visual Crossing</label><label><input type="checkbox" id="useMet" checked> MET Norway</label><label><input type="checkbox" id="useOpenmeteo" checked> Open-Meteo</label><label><input type="checkbox" id="useWeatherapi"> WeatherAPI.com</label><label><input type="checkbox" id="useTomorrow"> Tomorrow.io</label><label><input type="checkbox" id="useOpenweather"> OpenWeather</label></div><p>Visual Crossing, MET Norway and Open-Meteo need no key. Add keys to include the other three providers in the average.</p><label>WeatherAPI.com key <input id="weatherapiKey" type="password" placeholder="Optional API key"></label><label>Tomorrow.io key <input id="tomorrowKey" type="password" placeholder="Optional API key"></label><label>OpenWeather 3.0 key <input id="openweatherKey" type="password" placeholder="Optional API key"></label><button type="button" id="saveSettings" class="primary">Save & refresh</button><p>Keys are stored only in this browser. Browser access and provider subscriptions may restrict some sources. No missing provider is treated as zero.</p></div><div id="locationModal" class="location-modal hidden" role="dialog" aria-modal="true" aria-label="Change location"><div class="location-card"><div class="location-top"><b>Change location</b><button type="button" id="locationClose" aria-label="Close location popup">✕</button></div><b>Location</b><form id="search" autocomplete="off"><div class="citywrap"><input id="city" value="Fawkner 3060" aria-label="Location" placeholder="Suburb or postcode"><div id="suggest" class="suggest hidden"></div></div><button class="primary">Find</button></form></div></div><div id="status"></div><section id="hourView" class="panel"><div class="row heading"><span class="hicon" title="Day">📅</span><span class="hicon" title="Time">🕒</span><span></span><span class="hicon" title="Temperature">🌡️</span><span class="rainhead" id="rainHead" role="button" tabindex="0" title="Tap to explain rain icons">🌧️ ⓘ</span><span class="windhead hicon" title="Wind (km/h)">💨</span></div><div id="hours"></div></section><div id="rainInfo" class="rainmodal hidden"><div class="rainbox"><b>Rain icons</b><table><thead><tr><th>Icon</th><th>When (first match wins)</th></tr></thead><tbody id="rainRules"></tbody></table><p></p><label id="rainDisplaySetting" class="rainsetting"><span>Show rain details</span><input type="checkbox" id="hideRainDetails"></label><button type="button" id="rainClose" class="primary">Close</button></div></div><section id="dayView" class="hidden"></section><div id="providers" class="source" aria-live="polite"></div></main><script>
-let coords={latitude:-37.7059,longitude:144.9686,timezone:'Australia/Melbourne'},forecast=null;const $=id=>document.getElementById(id);const fmt=(n,d=1)=>Number.isFinite(Number(n))&&n!==null?Number(n).toFixed(d):'—';const rainAmount=n=>{let v=num(n);return v===null||v<=0?'':v<0.01?'<0.01':v.toFixed(2)};const num=n=>n===null||n===undefined||!Number.isFinite(Number(n))?null:Number(n);const icon=(c,night=false)=>{let kind=c==null?'unknown':c===0?'clear':c<=2?'partly':c===3?'cloud':c<=48?'fog':c<=57?'drizzle':c<=67?'rain':c<=77?'snow':c<=82?'showers':c<=86?'snow':'storm';let sky=night?'<path d="M13 2a8 8 0 1 0 9 12A8 8 0 0 1 13 2" fill="#f7e7a2"/>':'<circle cx="11" cy="10" r="5" fill="#ffcb51"/><path d="M11 1v3M11 16v3M2 10h3M17 10h3M4 3l2 2M16 15l2 2M18 3l-2 2M6 15l-2 2" stroke="#ffcb51" stroke-width="1.7" stroke-linecap="round"/>';let cloud='<path d="M8 20h16a6 6 0 0 0 .2-12A9 9 0 0 0 7 9a5.5 5.5 0 0 0 1 11Z" fill="#c7d4e4" stroke="#8da2bb" stroke-width="1"/>';let drops=n=>Array.from({length:n},(_,i)=>`<path d="M${9+i*7} 23l-2 5" stroke="#58baff" stroke-width="2.6" stroke-linecap="round"/>`).join('');let detail=kind==='drizzle'?drops(1):kind==='rain'?drops(2):kind==='showers'?drops(3):kind==='storm'?drops(2)+'<path d="M20 20l-5 8h5l-3 5" stroke="#ffd04d" stroke-width="2" fill="none"/>':kind==='snow'?'<text x="11" y="30" font-size="11" fill="#b8e9ff">✳</text>':kind==='fog'?'<path d="M5 24h24M9 28h19" stroke="#a8b6c9" stroke-width="2"/>':'';let cloudy=kind!=='clear';return `<svg viewBox="0 0 36 36" width="23" height="23" aria-label="${kind}${night?' at night':''}" role="img" style="vertical-align:middle;overflow:visible">${sky}${cloudy?`<g transform="translate(3 2) scale(.87)">${cloud}${detail}</g>`:''}${kind==='unknown'?'?':''}</svg>`};const compass=d=>['N','NE','E','SE','S','SW','W','NW'][Math.round(d/45)%8];const tempColor=t=>{if(t==null)return '#cbd5e1';const stops=[[0,'#79baf0'],[10,'#a6c9da'],[16,'#d5d5d2'],[22,'#ffb65a'],[27,'#ff8245'],[32,'#ed3b31'],[40,'#ff1717']];let i=1;while(i<stops.length&&t>stops[i][0])i++;if(i===stops.length)return stops[stops.length-1][1];const [lo,hi]=[stops[i-1],stops[i]],f=Math.max(0,Math.min(1,(t-lo[0])/(hi[0]-lo[0])));const rgb=h=>[1,3,5].map(n=>parseInt(h.slice(n,n+2),16));let x=rgb(lo[1]),y=rgb(hi[1]);return `rgb(${x.map((v,k)=>Math.round(v+(y[k]-v)*f)).join(',')})`};const time12=t=>{let h=Number(t.slice(11,13));return `${h%12||12}${h<12?'am':'pm'}`};const dayName=s=>new Date(s+'T12:00:00Z').toLocaleDateString('en-AU',{weekday:'short',timeZone:'UTC'});function setTab(t){$('hourView').classList.toggle('hidden',t!=='hour');$('dayView').classList.toggle('hidden',t!=='day');$('viewToggle').textContent=t==='hour'?'Hourly ⇄':'Daily ⇄';$('viewToggle').setAttribute('aria-label','Current view '+(t==='hour'?'Hourly':'Daily')+'. Tap to switch');localStorage.setItem('ensemble_view',t)} const rules=[[5,0.6,90,'More than 0.5 mm'],[4,0.3,70,'≥70% and ≥0.3 mm'],[3,0.3,50,'≥50% and ≥0.3 mm, or ≥70% and ≥0.2 mm'],[2,0.3,30,'≥30% and ≥0.3 mm, or ≥40% and ≥0.2 mm'],[1,0.1,10,'≥10% or ≥0.1 mm'],[1,0.05,5,'Under 0.1 mm and under 10% (faded grey)'],[0,0,0,'No rain (0 mm)']];
+let coords={latitude:-37.7059,longitude:144.9686,timezone:'Australia/Melbourne'},forecast=null;const $=id=>document.getElementById(id);const fmt=(n,d=1)=>Number.isFinite(Number(n))&&n!==null?Number(n).toFixed(d):'—';const rainAmount=n=>{let v=num(n);return v===null||v<=0?'':v<0.01?'<0.01':v.toFixed(2)};const num=n=>n===null||n===undefined||!Number.isFinite(Number(n))?null:Number(n);const icon=(c,night=false)=>{let kind=c==null?'unknown':c===0?'clear':c<=2?'partly':c===3?'cloud':c<=48?'fog':c<=57?'drizzle':c<=67?'rain':c<=77?'snow':c<=82?'showers':c<=86?'snow':'storm';let sky=night?'<path d="M13 2a8 8 0 1 0 9 12A8 8 0 0 1 13 2" fill="#f7e7a2"/>':'<circle cx="11" cy="10" r="5" fill="#ffcb51"/><path d="M11 1v3M11 16v3M2 10h3M17 10h3M4 3l2 2M16 15l2 2M18 3l-2 2M6 15l-2 2" stroke="#ffcb51" stroke-width="1.7" stroke-linecap="round"/>';let cloud='<path d="M8 20h16a6 6 0 0 0 .2-12A9 9 0 0 0 7 9a5.5 5.5 0 0 0 1 11Z" fill="#c7d4e4" stroke="#8da2bb" stroke-width="1"/>';let drops=n=>Array.from({length:n},(_,i)=>`<path d="M${9+i*7} 23l-2 5" stroke="#58baff" stroke-width="2.6" stroke-linecap="round"/>`).join('');let detail=kind==='drizzle'?drops(1):kind==='rain'?drops(2):kind==='showers'?drops(3):kind==='storm'?drops(2)+'<path d="M20 20l-5 8h5l-3 5" stroke="#ffd04d" stroke-width="2" fill="none"/>':kind==='snow'?'<text x="11" y="30" font-size="11" fill="#b8e9ff">✳</text>':kind==='fog'?'<path d="M5 24h24M9 28h19" stroke="#a8b6c9" stroke-width="2"/>':'';let cloudy=kind!=='clear';return `<svg viewBox="0 0 36 36" width="23" height="23" aria-label="${kind}${night?' at night':''}" role="img" style="vertical-align:middle;overflow:visible">${sky}${cloudy?`<g transform="translate(3 2) scale(.87)">${cloud}${detail}</g>`:''}${kind==='unknown'?'?':''}</svg>`};const compass=d=>['N','NE','E','SE','S','SW','W','NW'][Math.round(d/45)%8];const tempColor=t=>{if(t==null)return '#cbd5e1';const stops=[[0,'#79baf0'],[10,'#a6c9da'],[16,'#d5d5d2'],[22,'#ffb65a'],[27,'#ff8245'],[32,'#ed3b31'],[40,'#ff1717']];let i=1;while(i<stops.length&&t>stops[i][0])i++;if(i===stops.length)return stops[stops.length-1][1];const [lo,hi]=[stops[i-1],stops[i]],f=Math.max(0,Math.min(1,(t-lo[0])/(hi[0]-lo[0])));const rgb=h=>[1,3,5].map(n=>parseInt(h.slice(n,n+2),16));let x=rgb(lo[1]),y=rgb(hi[1]);return `rgb(${x.map((v,k)=>Math.round(v+(y[k]-v)*f)).join(',')})`};const time12=t=>{let h=Number(t.slice(11,13));return `${h%12||12}${h<12?'am':'pm'}`};const dayName=s=>new Date(s+'T12:00:00Z').toLocaleDateString('en-AU',{weekday:'short',timeZone:'UTC'});function setTab(t){localStorage.setItem('ensemble_view',t);$('hourView').classList.toggle('hidden',t!=='hour');$('dayView').classList.toggle('hidden',t!=='day');$('viewToggle').textContent=t==='hour'?'Hourly ⇄':'Daily ⇄';$('viewToggle').setAttribute('aria-label','Current view '+(t==='hour'?'Hourly':'Daily')+'. Tap to switch');localStorage.setItem('ensemble_view',t)} const rules=[[5,0.6,90,'More than 0.5 mm'],[4,0.3,70,'≥70% and ≥0.3 mm'],[3,0.3,50,'≥50% and ≥0.3 mm, or ≥70% and ≥0.2 mm'],[2,0.3,30,'≥30% and ≥0.3 mm, or ≥40% and ≥0.2 mm'],[1,0.1,10,'≥10% or ≥0.1 mm'],[1,0.05,5,'Under 0.1 mm and under 10% (faded grey)'],[0,0,0,'No rain (0 mm)']];
 const openRain=()=>{$('rainDisplaySetting').classList.remove('hidden');$('hideRainDetails').checked=!hideRainDetails();$('rainInfo').querySelector('b').textContent='Rain icons';$('rainInfo').querySelector('table').classList.remove('hidden');$('rainInfo').querySelector('p').textContent='';$('rainRules').innerHTML=rules.map(r=>`<tr><td>${r[0]?rainDrops(r[2],r[1]):'—'}</td><td>${r[3]}</td></tr>`).join('');$('rainInfo').classList.remove('hidden')};
 $('rainHead').onclick=openRain;$('rainHead').onkeydown=e=>{if(e.key==='Enter'||e.key===' '){e.preventDefault();openRain()}};
 $('rainClose').onclick=()=>$('rainInfo').classList.add('hidden');$('rainInfo').onclick=e=>{if(e.target.id==='rainInfo')$('rainInfo').classList.add('hidden')};
@@ -159,7 +172,7 @@ const hideRainDetails=()=>localStorage.getItem('ensemble_hide_rain')==='true';
  const condition=code==null?'Forecast unavailable':code===0?'Clear skies':code<=2?'Partly cloudy':code===3?'Cloudy':code<=48?'Foggy':code<=57?'Drizzle':code<=67?'Rain':code<=77?'Snow':code<=82?'Showers':code<=86?'Snow showers':'Thunderstorms';
  const summary=condition+(Number.isFinite(rain)&&rain>=1?' with rain expected':Number.isFinite(prob)&&prob>=40?' with a chance of rain':'')+'.';
  const rainWidth=Number.isFinite(prob)?Math.max(0,Math.min(100,prob)):0;
- return `<div class="day"><div class="daily-info"><div class="daily-day"><span class="icon">${icon(code)}</span><span>${new Date(t+'T12:00:00').toLocaleDateString('en-AU',{weekday:'long'})}</span></div><div class="daily-sentence">${summary}</div></div><div class="daily-temp" style="--bar-left:${left}%;--bar-right:${left+width}%"><span class="low">${Number.isFinite(low)?Math.round(low)+'°':'—'}</span><div class="daily-temp-track"><div class="daily-temp-fill" style="left:${left}%;width:${width}%"></div></div><span class="high">${Number.isFinite(high)?Math.round(high)+'°':'—'}</span></div><div class="daily-rain"><div class="daily-rain-text"><span>${Number.isFinite(prob)?Math.round(prob)+'%':'—'}</span><span>${Number.isFinite(rain)?fmt(rain)+'mm':'—'}</span></div><div class="daily-rain-track"><div class="daily-rain-fill" style="width:${rainWidth}%"></div></div></div></div>`
+ return `${i===7?'<div class="extended-forecast"><span>Extended Forecast</span></div>':''}<div class="day" style="position:relative"><span class="daily-source-count" title="Number of forecast sources for this day" aria-label="${d.source_count?.[i]??0} forecast sources">${d.source_count?.[i]??0}</span><div class="daily-info"><div class="daily-day"><span class="icon">${icon(code)}</span><span>${new Date(t+'T12:00:00').toLocaleDateString('en-AU',{weekday:'short'})}</span></div><div class="daily-sentence">${summary}</div></div><div class="daily-temp" style="--bar-left:${left}%;--bar-right:${left+width}%"><span class="low">${Number.isFinite(low)?Math.round(low)+'°':'—'}</span><div class="daily-temp-track"><div class="daily-temp-fill" style="left:${left}%;width:${width}%"></div></div><span class="high">${Number.isFinite(high)?Math.round(high)+'°':'—'}</span></div><div class="daily-rain" style="${Number.isFinite(rain)&&Number(rain.toFixed(1))===0?'visibility:hidden':''}"><div class="daily-rain-text"><span>${Number.isFinite(prob)?Math.round(prob)+'%':'—'}</span><span>${Number.isFinite(rain)?fmt(rain)+'mm':'—'}</span></div><div class="daily-rain-track"><div class="daily-rain-fill" style="width:${rainWidth}%"></div></div></div></div>`
 }).join('')}
 const localHour=(date,tz)=>{let parts=new Intl.DateTimeFormat('en-GB',{timeZone:tz,year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',hourCycle:'h23'}).formatToParts(date);let v=Object.fromEntries(parts.map(x=>[x.type,x.value]));return `${v.year}-${v.month}-${v.day}T${v.hour}:00`};
 const numeric=v=>v===null||v===undefined||v===''||!Number.isFinite(Number(v))?null:Number(v);
@@ -172,26 +185,28 @@ const keys=()=>({weatherapi:localStorage.getItem('ensemble_weatherapi')||'',tomo
 // Cache successful forecast API responses for 15 minutes, per exact URL/location/key.
 const FORECAST_CACHE_MS=15*60*1000;
 const forecastRequests=new Map();
+const apiResponseTimes=new Map();
 const cacheKey=url=>'weather_api_cache_v1_'+url;
 const getJSON=async(url)=>{
  const key=cacheKey(url),now=Date.now();
  let cached=null;
  try{cached=JSON.parse(localStorage.getItem(key)||'null')}catch(e){}
- if(cached&&cached.savedAt>now-FORECAST_CACHE_MS&&cached.data)return cached.data;
+ if(cached&&cached.savedAt>now-FORECAST_CACHE_MS&&cached.data){apiResponseTimes.set(url,cached.savedAt);return cached.data;}
  if(forecastRequests.has(url))return forecastRequests.get(url);
  const request=(async()=>{
   try{
    const r=await fetch(url);
    if(!r.ok)throw Error('HTTP '+r.status);
    const data=await r.json();
-   try{localStorage.setItem(key,JSON.stringify({savedAt:Date.now(),data}))}catch(e){
+   const fetchedAt=Date.now();apiResponseTimes.set(url,fetchedAt);
+   try{localStorage.setItem(key,JSON.stringify({savedAt:fetchedAt,data}))}catch(e){
     // Storage can be full; still return live data without breaking forecasts.
     console.warn('Weather cache storage unavailable',e);
    }
    return data;
   }catch(e){
    // During rate limits or connectivity loss, show previously successful data if available.
-   if(cached?.data){console.warn('Using older cached weather response:',e.message);return cached.data}
+   if(cached?.data){apiResponseTimes.set(url,cached.savedAt);console.warn('Using older cached weather response:',e.message);return cached.data}
    throw e;
   }
  })();
@@ -199,12 +214,47 @@ const getJSON=async(url)=>{
  try{return await request}finally{forecastRequests.delete(url)}
 };
 const entry=(time,temp,prob,rain,wind,dir,code)=>({time,temp:numeric(temp),prob:numeric(prob),rain:numeric(rain),wind:numeric(wind),dir:numeric(dir),code:meteoCode(code)});
-async function visualCrossing(){let url='https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/'+encodeURIComponent(coords.latitude+','+coords.longitude)+'?unitGroup=metric&include=days,hours&contentType=json';let j=await getJSON(url);return (j.days||[]).flatMap(d=>(d.hours||[]).map(h=>entry(d.datetime+'T'+h.datetime.slice(0,2)+':00',h.temp,h.precipprob,h.precip,h.windspeed,h.winddir,vcCode(h))))}
-async function metNorway(){let lat=Number(coords.latitude).toFixed(4),lon=Number(coords.longitude).toFixed(4);let j=await getJSON(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`);return (j.properties?.timeseries||[]).filter(x=>x.data?.next_1_hours).map(x=>{let v=x.data.instant.details,n=x.data.next_1_hours;return entry(localHour(new Date(x.time),coords.timezone),v.air_temperature,null,n.details?.precipitation_amount,v.wind_speed==null?null:v.wind_speed*3.6,v.wind_from_direction,({'clearsky':0,'fair':1,'partlycloudy':2,'cloudy':3,'fog':45,'lightrain':61,'rain':63,'heavyrain':65,'snow':73,'rainshowers':80,'heavyrainshowers':82,'thunderstorm':95})[(n.summary?.symbol_code||'').replace(/_(day|night|polartwilight)$/,'')]??null)})}
-async function weatherAPI(key){let j=await getJSON(`https://api.weatherapi.com/v1/forecast.json?key=${encodeURIComponent(key)}&q=${coords.latitude},${coords.longitude}&days=3`);return (j.forecast?.forecastday||[]).flatMap(d=>(d.hour||[]).map(h=>entry(h.time.replace(' ','T'),h.temp_c,h.chance_of_rain,h.precip_mm,h.wind_kph,h.wind_degree,waCode(h))))}
-async function tomorrowAPI(key){let j=await getJSON(`https://api.tomorrow.io/v4/weather/forecast?location=${coords.latitude},${coords.longitude}&timesteps=1h&units=metric&apikey=${encodeURIComponent(key)}`);return (j.timelines?.hourly||[]).map(x=>{let v=x.values||{};return entry(localHour(new Date(x.time),coords.timezone),v.temperature,v.precipitationProbability,v.rainAccumulation??null,v.windSpeed==null?null:v.windSpeed*3.6,v.windDirection,tomorrowCode(v.weatherCode))})}
-async function openWeather(key){let j=await getJSON(`https://api.openweathermap.org/data/3.0/onecall?lat=${coords.latitude}&lon=${coords.longitude}&units=metric&exclude=minutely,daily,alerts&appid=${encodeURIComponent(key)}`);return (j.hourly||[]).map(h=>entry(localHour(new Date(h.dt*1000),coords.timezone),h.temp,h.pop==null?null:h.pop*100,h.rain?.['1h']??h.snow?.['1h']??0,h.wind_speed==null?null:h.wind_speed*3.6,h.wind_deg,owCode(h.weather?.[0])))}
-async function openMeteo(){let p=new URLSearchParams({latitude:coords.latitude,longitude:coords.longitude,hourly:'temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_direction_10m,weather_code',wind_speed_unit:'kmh',timezone:coords.timezone,forecast_days:'4'});let j=await getJSON('https://api.open-meteo.com/v1/forecast?'+p),h=j.hourly||{};return (h.time||[]).map((t,i)=>entry(t,h.temperature_2m?.[i],h.precipitation_probability?.[i],h.precipitation?.[i],h.wind_speed_10m?.[i],h.wind_direction_10m?.[i],h.weather_code?.[i]))}
+// Each provider returns {hourly, daily}. Daily values are the provider's own
+// aggregates where available; hourly fallback is used only for missing dates.
+const dailyRow=(date,lo,hi,rain,prob,wind,dir,code)=>({date,lo:numeric(lo),hi:numeric(hi),rain:numeric(rain),prob:numeric(prob),wind:numeric(wind),dir:numeric(dir),code:meteoCode(code)});
+const bundle=(hourly,daily=[])=>({hourly,daily});
+async function visualCrossing(){
+ const url='https://weather.visualcrossing.com/VisualCrossingWebServices/rest/services/timeline/'+encodeURIComponent(coords.latitude+','+coords.longitude)+'?unitGroup=metric&include=days,hours&contentType=json';
+ const j=await getJSON(url),days=j.days||[];
+ return bundle(days.flatMap(d=>(d.hours||[]).map(h=>entry(d.datetime+'T'+h.datetime.slice(0,2)+':00',h.temp,h.precipprob,h.precip,h.windspeed,h.winddir,vcCode(h)))),days.map(d=>dailyRow(d.datetime,d.tempmin,d.tempmax,d.precip,d.precipprob,d.windspeed,d.winddir,vcCode(d))));
+}
+async function metNorway(){
+ const lat=Number(coords.latitude).toFixed(4),lon=Number(coords.longitude).toFixed(4);
+ const j=await getJSON(`https://api.met.no/weatherapi/locationforecast/2.0/compact?lat=${lat}&lon=${lon}`);
+ const rows=(j.properties?.timeseries||[]).map(x=>{const v=x.data?.instant?.details||{},n=x.data?.next_1_hours||x.data?.next_6_hours||x.data?.next_12_hours||{};
+ const interval=x.data?.next_1_hours?1:x.data?.next_6_hours?6:12;
+ return entry(localHour(new Date(x.time),coords.timezone),v.air_temperature,null,n.details?.precipitation_amount==null?null:n.details.precipitation_amount/interval,v.wind_speed==null?null:v.wind_speed*3.6,v.wind_from_direction,({'clearsky':0,'fair':1,'partlycloudy':2,'cloudy':3,'fog':45,'lightrain':61,'rain':63,'heavyrain':65,'snow':73,'rainshowers':80,'heavyrainshowers':82,'thunderstorm':95})[(n.summary?.symbol_code||'').replace(/_(day|night|polartwilight)$/,'')]??null);
+ });return bundle(rows);
+}
+async function weatherAPI(key){
+ // The service returns only the days allowed by the user's subscription.
+ let j;try{j=await getJSON(`https://api.weatherapi.com/v1/forecast.json?key=${encodeURIComponent(key)}&q=${coords.latitude},${coords.longitude}&days=14`)}catch(e){j=await getJSON(`https://api.weatherapi.com/v1/forecast.json?key=${encodeURIComponent(key)}&q=${coords.latitude},${coords.longitude}&days=3`)}
+ const days=j.forecast?.forecastday||[];
+ return bundle(days.flatMap(d=>(d.hour||[]).map(h=>entry(h.time.replace(' ','T'),h.temp_c,h.chance_of_rain,h.precip_mm,h.wind_kph,h.wind_degree,waCode(h)))),days.map(d=>dailyRow(d.date,d.day?.mintemp_c,d.day?.maxtemp_c,d.day?.totalprecip_mm,d.day?.daily_chance_of_rain,d.day?.maxwind_kph,null,waCode(d.day))));
+}
+async function tomorrowAPI(key){
+ const j=await getJSON(`https://api.tomorrow.io/v4/weather/forecast?location=${coords.latitude},${coords.longitude}&timesteps=1h,1d&units=metric&apikey=${encodeURIComponent(key)}`);
+ const hours=(j.timelines?.hourly||[]).map(x=>{const v=x.values||{};return entry(localHour(new Date(x.time),coords.timezone),v.temperature,v.precipitationProbability,v.rainAccumulation??null,v.windSpeed==null?null:v.windSpeed*3.6,v.windDirection,tomorrowCode(v.weatherCode))});
+ const days=(j.timelines?.daily||[]).map(x=>{const v=x.values||{};return dailyRow(localHour(new Date(x.time),coords.timezone).slice(0,10),v.temperatureMin,v.temperatureMax,v.rainAccumulationSum??v.precipitationAccumulationSum,v.precipitationProbabilityMax??v.precipitationProbability,v.windSpeedMax==null?null:v.windSpeedMax*3.6,v.windDirection,tomorrowCode(v.weatherCodeMax??v.weatherCode))});
+ return bundle(hours,days);
+}
+async function openWeather(key){
+ // One Call 3.0: 48 hours hourly plus 8 days of daily forecasts.
+ const j=await getJSON(`https://api.openweathermap.org/data/3.0/onecall?lat=${coords.latitude}&lon=${coords.longitude}&units=metric&exclude=minutely,alerts&appid=${encodeURIComponent(key)}`);
+ const hours=(j.hourly||[]).map(h=>entry(localHour(new Date(h.dt*1000),coords.timezone),h.temp,h.pop==null?null:h.pop*100,h.rain?.['1h']??h.snow?.['1h']??0,h.wind_speed==null?null:h.wind_speed*3.6,h.wind_deg,owCode(h.weather?.[0])));
+ const days=(j.daily||[]).map(d=>dailyRow(localHour(new Date(d.dt*1000),coords.timezone).slice(0,10),d.temp?.min,d.temp?.max,(d.rain??0)+(d.snow??0),d.pop==null?null:d.pop*100,d.wind_speed==null?null:d.wind_speed*3.6,d.wind_deg,owCode(d.weather?.[0])));
+ return bundle(hours,days);
+}
+async function openMeteo(){
+ const p=new URLSearchParams({latitude:coords.latitude,longitude:coords.longitude,hourly:'temperature_2m,precipitation_probability,precipitation,wind_speed_10m,wind_direction_10m,weather_code',daily:'weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum,precipitation_probability_max,wind_speed_10m_max,wind_direction_10m_dominant',wind_speed_unit:'kmh',timezone:coords.timezone,forecast_days:'16'});
+ const j=await getJSON('https://api.open-meteo.com/v1/forecast?'+p),h=j.hourly||{},d=j.daily||{};
+ return bundle((h.time||[]).map((t,i)=>entry(t,h.temperature_2m?.[i],h.precipitation_probability?.[i],h.precipitation?.[i],h.wind_speed_10m?.[i],h.wind_direction_10m?.[i],h.weather_code?.[i])),(d.time||[]).map((t,i)=>dailyRow(t,d.temperature_2m_min?.[i],d.temperature_2m_max?.[i],d.precipitation_sum?.[i],d.precipitation_probability_max?.[i],d.wind_speed_10m_max?.[i],d.wind_direction_10m_dominant?.[i],d.weather_code?.[i])));
+}
 const rainDrops=(p,mm)=>{mm=num(mm);p=p==null?0:Number(p);if(!(mm>0))return '';let n=0,c='#38bdf8';
 if(mm>0.5)n=5;else if(p>=70&&mm>=0.3)n=4;else if(p>=50&&mm>=0.3||p>=70&&mm>=0.2)n=3;else if((p>=30&&mm>=0.3)||(p>=40&&mm>=0.2))n=2;else if(p>=10||mm>=0.1)n=1;else{n=1;c='#94a3b8" opacity="0.5'}
 const d=`<svg viewBox="0 0 10 14"><path d="M5 0C5 0 0 6.5 0 9a5 5 0 0 0 10 0C10 6.5 5 0 5 0z" fill="${c}"/></svg>`;return `<span class="drops" title="${n} drop${n>1?'s':''}">${d.repeat(n)}</span>`};
@@ -220,39 +270,53 @@ let loadToken=0;
 const enabled=(id)=>{let v=localStorage.getItem('ensemble_use_'+id);return v===null?(id==='Visual'||id==='Met'||id==='Openmeteo'):v==='true'};
 function setLastRefreshed(date){const d=new Date(date);if(!Number.isFinite(d.getTime()))return;const formatted=new Intl.DateTimeFormat('en-AU',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit',hour12:true}).format(d);$('lastRefreshed').textContent='Updated '+formatted;try{localStorage.setItem('ensemble_last_refresh',d.toISOString())}catch(e){}}
 try{const saved=localStorage.getItem('ensemble_last_refresh');if(saved)setLastRefreshed(saved)}catch(e){}
-async function load(){let token=++loadToken;$('status').textContent='Loading selected forecasts…';let k=keys(),jobs=[];if(enabled('Visual'))jobs.push(['Visual Crossing',visualCrossing()]);if(enabled('Met'))jobs.push(['MET Norway',metNorway()]);if(enabled('Openmeteo'))jobs.push(['Open-Meteo',openMeteo()]);if(enabled('Weatherapi')&&k.weatherapi)jobs.push(['WeatherAPI',weatherAPI(k.weatherapi)]);if(enabled('Tomorrow')&&k.tomorrow)jobs.push(['Tomorrow.io',tomorrowAPI(k.tomorrow)]);if(enabled('Openweather')&&k.openweather)jobs.push(['OpenWeather',openWeather(k.openweather)]);if(!jobs.length){$('status').textContent='No configured providers selected. Enable a provider in ⚙ and add its key if required.';$('providers').textContent='';return}const windPromise=enabled('Visual')?jobs.find(x=>x[0]==='Visual Crossing')[1]:visualCrossing();let settled=await Promise.allSettled(jobs.map(x=>x[1]));if(token!==loadToken)return;let sources=[],errors=[];settled.forEach((r,i)=>{if(r.status==='fulfilled'&&r.value.length)sources.push({name:jobs[i][0],rows:r.value});else errors.push(jobs[i][0]+': '+(r.reason?.message||'no data'))});if(!sources.length){$('status').textContent='No forecast providers available. '+errors.join(' · ');$('providers').textContent='';return}// Extend the daily horizon when selected providers supply fewer than seven days.
-// Supplemental Open-Meteo values are used only for timestamps not covered by selected providers.
-const existingDates=new Set(sources.flatMap(src=>src.rows.map(r=>r.time.slice(0,10))));
-let fallbackUsed=false;
-if(existingDates.size<7){
- try{
-  const supplemental=enabled('Openmeteo')?sources.find(src=>src.name==='Open-Meteo')?.rows:await openMeteo();
-  if(supplemental?.length){
-   const missing=supplemental.filter(r=>!existingDates.has(r.time.slice(0,10)));
-   if(missing.length){sources.push({name:'Open-Meteo (additional days)',rows:missing});fallbackUsed=true}
-  }
- }catch(e){console.warn('Additional daily forecast unavailable',e)}
+function combineDaily(sources){
+ const dates=new Map();
+ for(const src of sources){
+  // Hourly-derived values are fallback only if the provider lacks a daily date.
+  const hourlyDaily=blend([{rows:src.data.hourly}]).daily;
+  const own=new Map(src.data.daily.map(d=>[d.date,d]));
+  hourlyDaily.time.forEach((date,i)=>{if(!own.has(date))own.set(date,dailyRow(date,hourlyDaily.temperature_2m_min[i],hourlyDaily.temperature_2m_max[i],hourlyDaily.precipitation_sum[i],hourlyDaily.precipitation_probability_max[i],hourlyDaily.wind_speed_10m_max[i],hourlyDaily.wind_direction_10m_dominant[i],hourlyDaily.weather_code[i]))});
+  for(const [date,row] of own){if(!dates.has(date))dates.set(date,[]);dates.get(date).push({name:src.name,row})}
+ }
+ const d={time:[],weather_code:[],temperature_2m_max:[],temperature_2m_min:[],precipitation_sum:[],precipitation_probability_max:[],wind_speed_10m_max:[],wind_direction_10m_dominant:[],source_count:[]};
+ for(const date of [...dates.keys()].sort()){
+  const rows=dates.get(date),values=k=>rows.map(x=>x.row[k]);
+  d.source_count.push(rows.filter(x=>['lo','hi','rain','prob','wind','code'].some(k=>x.row[k]!=null)).length);
+  const preferred=rows.find(x=>x.name==='Visual Crossing')?.row;
+  const fallback=rows.filter(x=>x.name!=='Visual Crossing').map(x=>x.row);
+  d.time.push(date);d.weather_code.push(dominant(values('code')));
+  d.temperature_2m_min.push(avg(values('lo')));d.temperature_2m_max.push(avg(values('hi')));
+  d.precipitation_sum.push(avg(values('rain')));d.precipitation_probability_max.push(avg(values('prob')));
+  d.wind_speed_10m_max.push(Number.isFinite(preferred?.wind)?preferred.wind:avg(fallback.map(x=>x.wind)));
+  d.wind_direction_10m_dominant.push(Number.isFinite(preferred?.dir)?preferred.dir:circularMean(fallback.map(x=>x.dir)));
+ }
+ return d;
 }
-forecast=blend(sources);
-// Wind is exclusively from Visual Crossing, regardless of selected forecast providers.
-// Never substitute another provider's wind if Visual Crossing is unavailable.
-let windRows=[];try{windRows=await windPromise}catch(e){console.warn('Visual Crossing wind unavailable',e)}
-if(token!==loadToken)return;
-const windByTime=new Map(windRows.map(r=>[r.time,r]));
-const hourly=forecast.hourly;
-for(let i=0;i<hourly.time.length;i++){
- const w=windByTime.get(hourly.time[i]);
- hourly.wind_speed_10m[i]=w&&Number.isFinite(w.wind)?w.wind:null;
- hourly.wind_direction_10m[i]=w&&Number.isFinite(w.dir)?w.dir:null;
+async function load(){
+ const token=++loadToken;$('status').textContent='Loading forecasts…';const k=keys();
+ const providers=[['Visual Crossing','Visual',visualCrossing],['MET Norway','Met',metNorway],['Open-Meteo','Openmeteo',openMeteo],
+ ...(k.weatherapi?[['WeatherAPI','Weatherapi',()=>weatherAPI(k.weatherapi)]]:[]),
+ ...(k.tomorrow?[['Tomorrow.io','Tomorrow',()=>tomorrowAPI(k.tomorrow)]]:[]),
+ ...(k.openweather?[['OpenWeather','Openweather',()=>openWeather(k.openweather)]]:[])];
+ const results=await Promise.allSettled(providers.map(x=>x[2]()));if(token!==loadToken)return;
+ const all=[],errors=[];
+ results.forEach((r,i)=>{if(r.status==='fulfilled'&&(r.value.hourly.length||r.value.daily.length))all.push({name:providers[i][0],id:providers[i][1],data:r.value});else errors.push(providers[i][0]+': '+(r.reason?.message||'no data'))});
+ if(!all.length){$('status').textContent='No forecast providers available. '+errors.join(' · ');return}
+ const hourlySources=all.filter(x=>x.data.hourly.length).map(x=>({name:x.name,rows:x.data.hourly}));
+ const hourlyByTime=new Map();for(const src of hourlySources)for(const row of src.rows){if(!hourlyByTime.has(row.time))hourlyByTime.set(row.time,[]);hourlyByTime.get(row.time).push({name:src.name,row})}
+ const priorityRows=[];for(const items of hourlyByTime.values()){const weather=items.find(x=>x.name==='WeatherAPI'),tomorrow=items.find(x=>x.name==='Tomorrow.io');priorityRows.push(...(weather&&tomorrow?[weather,tomorrow]:items).map(x=>x.row))}
+ const hourly=blend([{rows:priorityRows}]).hourly;
+ const windTimes=new Map();for(const src of all)for(const row of src.data.hourly){if(!windTimes.has(row.time))windTimes.set(row.time,[]);windTimes.get(row.time).push({name:src.name,row})}
+ hourly.time.forEach((time,i)=>{const rows=windTimes.get(time)||[],preferred=rows.find(x=>x.name==='Visual Crossing')?.row,others=rows.filter(x=>x.name!=='Visual Crossing').map(x=>x.row);
+  hourly.wind_speed_10m[i]=Number.isFinite(preferred?.wind)?preferred.wind:avg(others.map(x=>x.wind));
+  hourly.wind_direction_10m[i]=Number.isFinite(preferred?.dir)?preferred.dir:circularMean(others.map(x=>x.dir));
+ });
+ forecast={hourly,daily:combineDaily(all)};
+ $('providers').textContent='Daily average: '+all.map(x=>x.name).join(', ')+' · '+forecast.daily.time.length+' days'+(errors.length?' · Unavailable: '+errors.join('; '):'');
+ $('status').textContent=hourlySources.length?'':'No hourly providers selected; daily forecast is available.';
+ render();const timestamps=[...apiResponseTimes].filter(([url])=>url.includes(String(coords.latitude))||url.includes(Number(coords.latitude).toFixed(4))).map(([,time])=>time).filter(Number.isFinite);if(timestamps.length)setLastRefreshed(Math.max(...timestamps));
 }
-for(let i=0;i<forecast.daily.time.length;i++){
- const date=forecast.daily.time[i];const indices=hourly.time.map((t,j)=>t.startsWith(date)?j:-1).filter(j=>j>=0);
- const speeds=indices.map(j=>hourly.wind_speed_10m[j]).filter(Number.isFinite);
- const directions=indices.map(j=>hourly.wind_direction_10m[j]).filter(Number.isFinite);
- forecast.daily.wind_speed_10m_max[i]=speeds.length?Math.max(...speeds):null;
- forecast.daily.wind_direction_10m_dominant[i]=directions.length?circularMean(directions):null;
-}
-$('providers').innerHTML='<b>Average of '+sources.length+' provider'+(sources.length===1?'':'s')+':</b> '+sources.filter(x=>x.name!=='Open-Meteo (additional days)').map(x=>x.name).join(', ')+(fallbackUsed?' · Extended days: Open-Meteo':'')+(errors.length?' · Unavailable: '+errors.join('; '):'');$('status').textContent='';render();setLastRefreshed(new Date())}
 $('hideRainDetails').checked=!hideRainDetails();$('hideRainDetails').onchange=()=>{localStorage.setItem('ensemble_hide_rain',String(!$('hideRainDetails').checked));render()};
   $('hours').addEventListener('click',e=>{const el=e.target.closest('[data-rain]');if(el&&hideRainDetails())showRainDetail(el.dataset.rain)});
   $('hours').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-rain]')){e.preventDefault();showRainDetail(e.target.dataset.rain)}});
@@ -282,5 +346,6 @@ $('city').addEventListener('blur',()=>setTimeout(hideSuggest,150));
 $('search').onsubmit=async e=>{e.preventDefault();hideSuggest();$('status').textContent='Finding location…';try{const r=await geoSearch($('city').value.trim(),1);if(!r.length)throw Error('Location not found');choosePlace(r[0])}catch(e){$('status').textContent=e.message}};
 $('place').textContent='\uD83D\uDCCD Fawkner, Victoria 3060';
 try{const sp=JSON.parse(localStorage.getItem('ensemble_place')||'null');if(sp&&sp.coords&&Number.isFinite(sp.coords.latitude)){coords=sp.coords;$('place').textContent='\uD83D\uDCCD '+ensurePostcode(sp.label,sp.input);$('city').value=sp.input||''}}catch(e){}
+setTab(localStorage.getItem('ensemble_view')==='day'?'day':'hour');
 load();
 </script><script>if ("serviceWorker" in navigator) { window.addEventListener("load", () => navigator.serviceWorker.register("./sw.js").catch(console.warn)); }</script></body></html>
