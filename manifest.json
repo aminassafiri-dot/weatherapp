@@ -1,0 +1,25 @@
+{
+  "name": "Weather Forecast",
+  "short_name": "Weather",
+  "description": "Multi-provider hourly and daily weather forecast",
+  "id": "./weather1.html",
+  "start_url": "./weather1.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#0b1220",
+  "theme_color": "#0b1220",
+  "icons": [
+    {
+      "src": "./icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
