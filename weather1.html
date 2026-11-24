@@ -111,7 +111,26 @@ let loadToken=0;
 const enabled=(id)=>{let v=localStorage.getItem('ensemble_use_'+id);return v===null?(id==='Visual'||id==='Met'||id==='Openmeteo'):v==='true'};
 function setLastRefreshed(date){const d=new Date(date);if(!Number.isFinite(d.getTime()))return;const formatted=new Intl.DateTimeFormat('en-AU',{day:'numeric',month:'short',hour:'numeric',minute:'2-digit',hour12:true}).format(d);$('lastRefreshed').textContent='Updated '+formatted;try{localStorage.setItem('ensemble_last_refresh',d.toISOString())}catch(e){}}
 try{const saved=localStorage.getItem('ensemble_last_refresh');if(saved)setLastRefreshed(saved)}catch(e){}
-async function load(){let token=++loadToken;$('status').textContent='Loading selected forecasts…';let k=keys(),jobs=[];if(enabled('Visual'))jobs.push(['Visual Crossing',visualCrossing()]);if(enabled('Met'))jobs.push(['MET Norway',metNorway()]);if(enabled('Openmeteo'))jobs.push(['Open-Meteo',openMeteo()]);if(enabled('Weatherapi')&&k.weatherapi)jobs.push(['WeatherAPI',weatherAPI(k.weatherapi)]);if(enabled('Tomorrow')&&k.tomorrow)jobs.push(['Tomorrow.io',tomorrowAPI(k.tomorrow)]);if(enabled('Openweather')&&k.openweather)jobs.push(['OpenWeather',openWeather(k.openweather)]);if(!jobs.length){$('status').textContent='No configured providers selected. Enable a provider in ⚙ and add its key if required.';$('providers').textContent='';return}let settled=await Promise.allSettled(jobs.map(x=>x[1]));if(token!==loadToken)return;let sources=[],errors=[];settled.forEach((r,i)=>{if(r.status==='fulfilled'&&r.value.length)sources.push({name:jobs[i][0],rows:r.value});else errors.push(jobs[i][0]+': '+(r.reason?.message||'no data'))});if(!sources.length){$('status').textContent='No forecast providers available. '+errors.join(' · ');$('providers').textContent='';return}forecast=blend(sources);$('providers').innerHTML='<b>Average of '+sources.length+' provider'+(sources.length===1?'':'s')+':</b> '+sources.map(x=>x.name).join(', ')+(errors.length?' · Unavailable: '+errors.join('; '):'');$('status').textContent='';render();setLastRefreshed(new Date())}
+async function load(){let token=++loadToken;$('status').textContent='Loading selected forecasts…';let k=keys(),jobs=[];if(enabled('Visual'))jobs.push(['Visual Crossing',visualCrossing()]);if(enabled('Met'))jobs.push(['MET Norway',metNorway()]);if(enabled('Openmeteo'))jobs.push(['Open-Meteo',openMeteo()]);if(enabled('Weatherapi')&&k.weatherapi)jobs.push(['WeatherAPI',weatherAPI(k.weatherapi)]);if(enabled('Tomorrow')&&k.tomorrow)jobs.push(['Tomorrow.io',tomorrowAPI(k.tomorrow)]);if(enabled('Openweather')&&k.openweather)jobs.push(['OpenWeather',openWeather(k.openweather)]);if(!jobs.length){$('status').textContent='No configured providers selected. Enable a provider in ⚙ and add its key if required.';$('providers').textContent='';return}const windPromise=enabled('Visual')?jobs.find(x=>x[0]==='Visual Crossing')[1]:visualCrossing();let settled=await Promise.allSettled(jobs.map(x=>x[1]));if(token!==loadToken)return;let sources=[],errors=[];settled.forEach((r,i)=>{if(r.status==='fulfilled'&&r.value.length)sources.push({name:jobs[i][0],rows:r.value});else errors.push(jobs[i][0]+': '+(r.reason?.message||'no data'))});if(!sources.length){$('status').textContent='No forecast providers available. '+errors.join(' · ');$('providers').textContent='';return}forecast=blend(sources);
+// Wind is exclusively from Visual Crossing, regardless of selected forecast providers.
+// Never substitute another provider's wind if Visual Crossing is unavailable.
+let windRows=[];try{windRows=await windPromise}catch(e){console.warn('Visual Crossing wind unavailable',e)}
+if(token!==loadToken)return;
+const windByTime=new Map(windRows.map(r=>[r.time,r]));
+const hourly=forecast.hourly;
+for(let i=0;i<hourly.time.length;i++){
+ const w=windByTime.get(hourly.time[i]);
+ hourly.wind_speed_10m[i]=w&&Number.isFinite(w.wind)?w.wind:null;
+ hourly.wind_direction_10m[i]=w&&Number.isFinite(w.dir)?w.dir:null;
+}
+for(let i=0;i<forecast.daily.time.length;i++){
+ const date=forecast.daily.time[i];const indices=hourly.time.map((t,j)=>t.startsWith(date)?j:-1).filter(j=>j>=0);
+ const speeds=indices.map(j=>hourly.wind_speed_10m[j]).filter(Number.isFinite);
+ const directions=indices.map(j=>hourly.wind_direction_10m[j]).filter(Number.isFinite);
+ forecast.daily.wind_speed_10m_max[i]=speeds.length?Math.max(...speeds):null;
+ forecast.daily.wind_direction_10m_dominant[i]=directions.length?circularMean(directions):null;
+}
+$('providers').innerHTML='<b>Average of '+sources.length+' provider'+(sources.length===1?'':'s')+':</b> '+sources.map(x=>x.name).join(', ')+(errors.length?' · Unavailable: '+errors.join('; '):'');$('status').textContent='';render();setLastRefreshed(new Date())}
 $('hideRainDetails').checked=!hideRainDetails();$('hideRainDetails').onchange=()=>{localStorage.setItem('ensemble_hide_rain',String(!$('hideRainDetails').checked));render()};
   $('hours').addEventListener('click',e=>{const el=e.target.closest('[data-rain]');if(el&&hideRainDetails())showRainDetail(el.dataset.rain)});
   $('hours').addEventListener('keydown',e=>{if((e.key==='Enter'||e.key===' ')&&e.target.matches('[data-rain]')){e.preventDefault();showRainDetail(e.target.dataset.rain)}});
